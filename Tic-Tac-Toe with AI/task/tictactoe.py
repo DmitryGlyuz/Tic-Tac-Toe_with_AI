@@ -12,18 +12,11 @@ class Table(list):
         self.current_player_sign = 'X' if cells_string.count('X') <= cells_string.count('O') else "O"
 
     def vertical_lines(self) -> list:
-        result = [list() for _ in range(3)]
-        for row in self:
-            for i in range(3):
-                result[i].append(row[i])
-        return result
+        return list(map(list, zip(*self)))
 
     def diagonals(self) -> list:
-        result = [list() for _ in range(2)]
-        for i in range(3):
-            result[0].append(self[i][i])
-            result[1].append(self[2 - i][i])
-        return result
+        return [[self[i][i] for i in range(3)],
+                [self[i][2 - i] for i in range(3)]]
 
     def all_lines(self) -> list:
         return self + self.vertical_lines() + self.diagonals()
