@@ -28,14 +28,6 @@ class Table(list):
     def three_in_line(line: list[str]) -> str:
         return line[0] if line.count(line[0]) == 3 and line[0] != ' ' else ''
 
-    def winner(self) -> str:
-        for line in self.all_lines():
-            winner = self.three_in_line(line)
-            if winner:
-                return winner
-        else:
-            return ''
-
     @staticmethod
     def convert_coordinates(other_method):
         def wrapper(self, _coordinates):
@@ -43,7 +35,7 @@ class Table(list):
         return wrapper
 
     @convert_coordinates
-    def make_move(self, _x: int, _y: int):
+    def set_sign(self, _x: int, _y: int):
         self[_x][_y] = self.current_player_sign
 
     @convert_coordinates
@@ -51,36 +43,64 @@ class Table(list):
         return self[_x][_y] != ' '
 
     def __str__(self) -> str:
-        horizontal_line = "---------"
+        horizontal_line = "-" * 9
         output = horizontal_line + '\n'
         for row in self:
-            output += "| "
-            for sign in row:
-                output += sign + ' '
-            output += "|\n"
+            output += f"| {' '.join(row)} |\n"
         return output + horizontal_line
 
 
-table = Table(input("Enter the cells: "))
+class Player:
+    def __init__(self, _table):
+        self.table = _table
 
-
-print(table)
-while True:
-    coordinates = input("Enter the coordinates:")
-    if re.fullmatch(r"[1-3] [1-3]", coordinates):
-        if table.is_cell_occupied(coordinates):
-            print("This cell is occupied! Choose another one!")
+    def make_move(self, coordinates):
+        if re.fullmatch(r"[1-3] [1-3]", coordinates):
+            if self.table.is_cell_occupied(coordinates):
+                raise ValueError("This cell is occupied! Choose another one!")
+            else:
+                self.table.set_sign(coordinates)
+                return True
+        elif re.match(r'\d+ \d+', coordinates):
+            raise ValueError("Coordinates should be from 1 to 3!")
         else:
-            table.make_move(coordinates)
-            break
-    elif re.match(r'\d+ \d+', coordinates):
-        print("Coordinates should be from 1 to 3!")
-    else:
-        print("You should enter numbers!")
+            raise ValueError("You should enter numbers!")
+
+
+class Game:
+    def __init__(self, _table: Table):
+        self.table = _table
+
+    def winner(self) -> str:
+        for line in self.table.all_lines():
+            winner = self.table.three_in_line(line)
+            if winner:
+                return winner
+        else:
+            return ''
+
+    def state(self) -> str:
+        winner = self.winner()
+        if winner:
+            return f"{winner} wins"
+        elif self.table.has_empty_cells():
+            return "Game not finished"
+        elif not self.table.has_empty_cells():
+            return "Draw"
+
+
+table = Table(input("Enter the cells: "))
+player = Player(table)
+game = Game(table)
+
 print(table)
-if table.has_empty_cells() and not table.winner():
-    print("Game not finished")
-elif not table.has_empty_cells() and not table.winner():
-    print("Draw ")
-elif table.winner():
-    print(f"{table.winner()} wins")
+
+successful_move = False
+while not successful_move:
+    try:
+        successful_move = player.make_move(input("Enter the coordinates:"))
+    except ValueError as error_message:
+        print(error_message)
+
+print(game.state())
+print(table)
