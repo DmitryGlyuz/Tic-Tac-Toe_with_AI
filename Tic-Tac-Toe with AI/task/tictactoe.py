@@ -1,15 +1,16 @@
+import random
 import re
+from itertools import chain, product
 
 
-class Table(list):
-    def __init__(self, cells_string: str = "_________"):
+class Table(list[list]):
+    def __init__(self):
         super().__init__()
-        # Splitting a string with symbols into rows in the table
-        for i in range(0, 8, 3):
-            current_row = cells_string.replace('_', ' ')[i:i+3]
-            # Append row to the table as a list with chars
-            self.append(list(current_row))
-        self.current_player_sign = 'X' if cells_string.count('X') <= cells_string.count('O') else "O"
+        for i in range(3):
+            self.append([' '] * 3)
+
+    def current_player_sign(self):
+        return 'X' if self.all_signs().count('X') <= self.all_signs().count('O') else 'O'
 
     def vertical_lines(self) -> list:
         return list(map(list, zip(*self)))
@@ -18,21 +19,27 @@ class Table(list):
         return [[self[i][i] for i in range(3)],
                 [self[i][2 - i] for i in range(3)]]
 
-    def all_lines(self) -> list:
-        return self + self.vertical_lines() + self.diagonals()
+    def all_signs(self) -> tuple:
+        return tuple(chain(*self))
+
+    def all_lines(self) -> tuple:
+        return tuple(chain(self, self.vertical_lines(), self.diagonals()))
 
     def contains_empty_cells(self) -> bool:
-        return any(map(lambda line: ' ' in line, self.all_lines()))
+        return ' ' in self.all_signs()
+
+    def free_cells(self) -> list[tuple]:
+        return [(i, j) for i, j in product(range(3), repeat=2) if self[i][j] == ' ']
 
     @staticmethod
     def three_in_line(line: list[str]) -> str:
         return line[0] if line.count(line[0]) == 3 and line[0] != ' ' else ''
 
     def set_sign(self, x: int, y: int):
-        self[x][y] = self.current_player_sign
+        self[x][y] = self.current_player_sign()
 
-    def is_cell_occupied(self, x: int, y: int) -> bool:
-        return self[x][y] != ' '
+    def is_cell_occupied(self, _x: int, _y: int) -> bool:
+        return self[_x][_y] != ' '
 
     def __str__(self) -> str:
         horizontal_line = "-" * 9
@@ -43,8 +50,10 @@ class Table(list):
 
 
 class Player:
-    def __init__(self, _table):
+    def __init__(self, _type, _table: Table):
+        self.type = _type
         self.table = _table
+        self.moves_counter = 0
 
     def manual_move(self, entered_coordinates: str):
         if re.fullmatch(r"[1-3] [1-3]", entered_coordinates):
@@ -53,16 +62,27 @@ class Player:
                 raise ValueError("This cell is occupied! Choose another one!")
             else:
                 self.table.set_sign(*coordinates)
-                return True
+                self.moves_counter += 1
         elif re.match(r'\d+ \d+', entered_coordinates):
             raise ValueError("Coordinates should be from 1 to 3!")
         else:
             raise ValueError("You should enter numbers!")
 
+    def random_move(self):
+        self.table.set_sign(*random.choice(self.table.free_cells()))
+
 
 class Game:
-    def __init__(self, _table: Table):
+    def __init__(self, _table: Table, first_player: Player, second_player: Player):
         self.table = _table
+        self.first_player = first_player
+        self.second_player = second_player
+        self.last_player = None
+        self.first_players_move = True
+
+    def current_player(self) -> Player:
+        self.last_player = self.second_player if self.last_player == self.first_player else self.first_player
+        return self.last_player
 
     def winner(self) -> str:
         for line in self.table.all_lines():
@@ -76,24 +96,38 @@ class Game:
         winner = self.winner()
         if winner:
             return f"{winner} wins"
-        elif self.table.contains_empty_cells():
-            return "Game not finished"
         elif not self.table.contains_empty_cells():
             return "Draw"
+        
+    def is_over(self) -> bool:
+        return self.winner() or not self.table.contains_empty_cells()
 
 
-table = Table(input("Enter the cells: "))
-player = Player(table)
-game = Game(table)
+table = Table()
+user = Player("user", table)
+computer = Player("easy", table)
+game = Game(table, user, computer)
+
+
+def user_turn():
+    moves = user.moves_counter
+    while moves == user.moves_counter:
+        try:
+            user.manual_move(input("Enter the coordinates: "))
+        except ValueError as error_message:
+            print(error_message)
+
+
+def make_move_by(player: Player):
+    if player.type == "user":
+        user_turn()
+    else:
+        print(f'Making move level "{player.type}"')
+        player.random_move()
+
 
 print(table)
-
-successful_move = False
-while not successful_move:
-    try:
-        successful_move = player.manual_move(input("Enter the coordinates:"))
-    except ValueError as error_message:
-        print(error_message)
-
+while not game.is_over():
+    make_move_by(game.current_player())
+    print(table)
 print(game.state())
-print(table)
