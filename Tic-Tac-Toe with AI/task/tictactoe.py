@@ -1,16 +1,26 @@
+from collections import Counter
 import random
 import re
 from itertools import chain, product
 
 
-class Table(list[list]):
+class Cell(str):
+    def __init__(self, value):
+        self.value = value
+        self.coordinates = 0, 0
+
+
+class Table(list):
     def __init__(self):
         super().__init__()
         for i in range(3):
-            self.append([' '] * 3)
+            self.append([])
+            for j in range(3):
+                self[i].append(Cell(' '))
+                self[i][j].coordinates = i, j
 
     def vertical_lines(self) -> list:
-        return list(map(list, zip(*self)))
+        return list(zip(*self))
 
     def diagonals(self) -> list:
         return [[self[i][i] for i in range(3)],
@@ -31,6 +41,13 @@ class Table(list[list]):
     @staticmethod
     def three_in_line(line: list[str]) -> str:
         return line[0] if line.count(line[0]) == 3 and line[0] != ' ' else ''
+
+    @staticmethod
+    def two_in_line(line: list[str]) -> str:
+        counter = Counter(line)
+        if counter[' '] == 1 and 2 in counter.values():
+            return counter.most_common(1)[0][0]
+        return ''
 
     def set_sign(self, sign: str, x: int, y: int):
         self[x][y] = sign
@@ -69,12 +86,22 @@ class Player:
     def random_move(self):
         self.table.set_sign(self.sign, *random.choice(self.table.free_cells()))
 
+    def smart_move(self):
+        for line in self.table.all_lines():
+            two_signs = self.table.two_in_line(line)
+            if two_signs:
+                x, y = line[line.index(' ')].coordinates
+                self.table.set_sign(self.sign, x, y)
+                break
+        else:
+            self.random_move()
+
 
 class Game:
-    def __init__(self, _table: Table, first_player: Player, second_player: Player):
+    def __init__(self, _table: Table, first_player_type: str, second_player_type: str):
         self.table = _table
-        self.first_player = first_player
-        self.second_player = second_player
+        self.first_player = Player(first_player_type, 'X', self.table)
+        self.second_player = Player(second_player_type, 'O', self.table)
         self.last_player = None
         self.first_players_move = True
 
@@ -96,36 +123,49 @@ class Game:
             return f"{winner} wins"
         elif not self.table.contains_empty_cells():
             return "Draw"
-        
+
     def is_over(self) -> bool:
         return self.winner() or not self.table.contains_empty_cells()
 
 
-table = Table()
-user = Player("user", 'X', table)
-computer = Player("easy", 'O', table)
-game = Game(table, user, computer)
-
-
-def user_turn():
-    moves = user.moves_counter
-    while moves == user.moves_counter:
+def user_turn(player: Player):
+    moves = player.moves_counter
+    while moves == player.moves_counter:
         try:
-            user.manual_move(input("Enter the coordinates: "))
+            player.manual_move(input("Enter the coordinates: "))
         except ValueError as error_message:
             print(error_message)
 
 
 def make_move_by(player: Player):
     if player.type == "user":
-        user_turn()
+        user_turn(player)
     else:
         print(f'Making move level "{player.type}"')
-        player.random_move()
+        if player.type == "easy":
+            player.random_move()
+        elif player.type == "medium":
+            player.smart_move()
 
 
-print(table)
-while not game.is_over():
-    make_move_by(game.current_player())
+def play_game(first_player_type, second_player_type):
+    table = Table()
+    game = Game(table, first_player_type, second_player_type)
+
     print(table)
-print(game.state())
+    while not game.is_over():
+        make_move_by(game.current_player())
+        print(table)
+    print(game.state())
+
+
+command = ''
+while command != "exit":
+    command = input("Input command: ")
+    correct_start_conditions = (command.startswith('start '),
+                                len(command.split(' ')) == 3,
+                                all(map(lambda it: it in ("user", "easy", "medium"), command.split(' ')[1:])))
+    if all(correct_start_conditions):
+        play_game(*command.split(' ')[1:])
+    elif command != 'exit' and not all(correct_start_conditions):
+        print("Bad parameters!")
