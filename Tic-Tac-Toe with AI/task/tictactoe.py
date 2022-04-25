@@ -9,9 +9,6 @@ class Table(list[list]):
         for i in range(3):
             self.append([' '] * 3)
 
-    def current_player_sign(self):
-        return 'X' if self.all_signs().count('X') <= self.all_signs().count('O') else 'O'
-
     def vertical_lines(self) -> list:
         return list(map(list, zip(*self)))
 
@@ -35,8 +32,8 @@ class Table(list[list]):
     def three_in_line(line: list[str]) -> str:
         return line[0] if line.count(line[0]) == 3 and line[0] != ' ' else ''
 
-    def set_sign(self, x: int, y: int):
-        self[x][y] = self.current_player_sign()
+    def set_sign(self, sign: str, x: int, y: int):
+        self[x][y] = sign
 
     def is_cell_occupied(self, _x: int, _y: int) -> bool:
         return self[_x][_y] != ' '
@@ -50,26 +47,27 @@ class Table(list[list]):
 
 
 class Player:
-    def __init__(self, _type, _table: Table):
+    def __init__(self, _type, _sign: str, _table: Table):
         self.type = _type
         self.table = _table
+        self.sign = _sign
         self.moves_counter = 0
 
-    def manual_move(self, entered_coordinates: str):
-        if re.fullmatch(r"[1-3] [1-3]", entered_coordinates):
-            coordinates = tuple(map(lambda it: int(it) - 1, entered_coordinates.split(' ')))
+    def manual_move(self, user_input: str):
+        if re.fullmatch(r"[1-3] [1-3]", user_input):
+            coordinates = tuple(map(lambda it: int(it) - 1, user_input.split(' ')))
             if self.table.is_cell_occupied(*coordinates):
                 raise ValueError("This cell is occupied! Choose another one!")
             else:
-                self.table.set_sign(*coordinates)
+                self.table.set_sign(self.sign, *coordinates)
                 self.moves_counter += 1
-        elif re.match(r'\d+ \d+', entered_coordinates):
+        elif re.match(r'\d+ \d+', user_input):
             raise ValueError("Coordinates should be from 1 to 3!")
         else:
             raise ValueError("You should enter numbers!")
 
     def random_move(self):
-        self.table.set_sign(*random.choice(self.table.free_cells()))
+        self.table.set_sign(self.sign, *random.choice(self.table.free_cells()))
 
 
 class Game:
@@ -104,8 +102,8 @@ class Game:
 
 
 table = Table()
-user = Player("user", table)
-computer = Player("easy", table)
+user = Player("user", 'X', table)
+computer = Player("easy", 'O', table)
 game = Game(table, user, computer)
 
 
