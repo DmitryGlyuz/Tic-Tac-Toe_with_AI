@@ -96,6 +96,16 @@ class Player:
         else:
             self.random_move()
 
+    def ai_move(self):
+        def winning(table: Table)
+            for line in table.all_lines():
+                if table.two_in_line(line) == self.sign:
+                    return True
+            else:
+                return False
+
+
+
 
 class Game:
     def __init__(self, _table: Table, first_player_type: str, second_player_type: str):
