@@ -4,27 +4,50 @@ import re
 from itertools import chain, product
 
 
-class Cell(str):
-    def __init__(self, value):
-        self.value = value
+class Cell:
+    def __init__(self, value: str = ' '):
+        self.value: str = value
         self.coordinates = 0, 0
+
+    def __eq__(self, it):
+        return it == self.value
+
+    def __add__(self, it: str) -> str:
+        return self.value + it
+
+    def __str__(self):
+        return self.value
+
+    def __repr__(self):
+        return self.value
+
+    def __hash__(self):
+        return self.value.__hash__()
+
+    def new_sign(self, sign):
+        self.value = sign
+
+    def is_occupied(self):
+        return self.value != ' '
+
+    def is_free(self):
+        return not self.is_occupied()
 
 
 class Table(list):
     def __init__(self):
         super().__init__()
         for i in range(3):
-            self.append([])
+            self.append(tuple(Cell() for _ in range(3)))
             for j in range(3):
-                self[i].append(Cell(' '))
                 self[i][j].coordinates = i, j
 
-    def vertical_lines(self) -> list:
-        return list(zip(*self))
+    def vertical_lines(self) -> tuple:
+        return tuple(map(tuple, zip(*self)))
 
-    def diagonals(self) -> list:
-        return [[self[i][i] for i in range(3)],
-                [self[i][2 - i] for i in range(3)]]
+    def diagonals(self) -> tuple:
+        return (tuple(self[i][i] for i in range(3)),
+                tuple(self[i][2 - i] for i in range(3)))
 
     def all_signs(self) -> tuple:
         return tuple(chain(*self))
@@ -36,11 +59,11 @@ class Table(list):
         return ' ' in self.all_signs()
 
     def free_cells(self) -> list[tuple]:
-        return [(i, j) for i, j in product(range(3), repeat=2) if self[i][j] == ' ']
+        return [(i, j) for i, j in product(range(3), repeat=2) if self[i][j].is_free()]
 
     @staticmethod
-    def three_in_line(line: list[str]) -> str:
-        return line[0] if line.count(line[0]) == 3 and line[0] != ' ' else ''
+    def three_in_line(line: list) -> str:
+        return line[0].value if line.count(line[0]) == 3 and line[0] != ' ' else ''
 
     @staticmethod
     def two_in_line(line: list[str]) -> str:
@@ -50,7 +73,7 @@ class Table(list):
         return ''
 
     def set_sign(self, sign: str, x: int, y: int):
-        self[x][y] = sign
+        self[x][y].new_sign(sign)
 
     def is_cell_occupied(self, _x: int, _y: int) -> bool:
         return self[_x][_y] != ' '
@@ -59,7 +82,10 @@ class Table(list):
         horizontal_line = "-" * 9
         output = horizontal_line + '\n'
         for row in self:
-            output += f"| {' '.join(row)} |\n"
+            output += "| "
+            for cell in row:
+                output += cell + ' '
+            output += "|\n"
         return output + horizontal_line
 
 
@@ -142,20 +168,20 @@ def make_move_by(player: Player):
         user_turn(player)
     else:
         print(f'Making move level "{player.type}"')
-        if player.type == "easy":
-            player.random_move()
-        elif player.type == "medium":
-            player.smart_move()
+        match player.type:
+            case 'easy':
+                player.random_move()
+            case 'medium':
+                player.smart_move()
 
 
 def play_game(first_player_type, second_player_type):
-    table = Table()
-    game = Game(table, first_player_type, second_player_type)
+    game = Game(Table(), first_player_type, second_player_type)
 
-    print(table)
+    print(game.table)
     while not game.is_over():
         make_move_by(game.current_player())
-        print(table)
+        print(game.table)
     print(game.state())
 
 
