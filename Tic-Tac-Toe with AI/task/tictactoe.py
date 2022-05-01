@@ -2,6 +2,7 @@ from collections import Counter
 import random
 import re
 from itertools import chain, product
+from copy import deepcopy
 
 
 class Cell:
@@ -26,6 +27,9 @@ class Cell:
 
     def new_sign(self, sign):
         self.value = sign
+
+    def remove_sign(self):
+        self.value = ' '
 
     def is_occupied(self):
         return self.value != ' '
@@ -75,8 +79,19 @@ class Table(list):
     def set_sign(self, sign: str, x: int, y: int):
         self[x][y].new_sign(sign)
 
+    def delete_sign(self, x: int, y: int):
+        self[x][y].remove_sign()
+
     def is_cell_occupied(self, _x: int, _y: int) -> bool:
-        return self[_x][_y] != ' '
+        return self[_x][_y].is_occupied()
+
+    def winner(self) -> str:
+        for line in self.all_lines():
+            winner = self.three_in_line(line)
+            if winner:
+                return winner
+        else:
+            return ''
 
     def __str__(self) -> str:
         horizontal_line = "-" * 9
@@ -97,14 +112,14 @@ class Player:
         self.moves_counter = 0
 
     def manual_move(self, user_input: str):
-        if re.fullmatch(r"[1-3] [1-3]", user_input):
-            coordinates = tuple(map(lambda it: int(it) - 1, user_input.split(' ')))
-            if self.table.is_cell_occupied(*coordinates):
+        if re.fullmatch(r"[1-3]\s+[1-3]", user_input):
+            x, y = tuple(map(lambda it: int(it) - 1, re.split(r'\s+', user_input)))
+            if self.table[x][y].is_occupied():
                 raise ValueError("This cell is occupied! Choose another one!")
             else:
-                self.table.set_sign(self.sign, *coordinates)
+                self.table.set_sign(self.sign, x, y)
                 self.moves_counter += 1
-        elif re.match(r'\d+ \d+', user_input):
+        elif re.match(r'\d+\s+\d+', user_input):
             raise ValueError("Coordinates should be from 1 to 3!")
         else:
             raise ValueError("You should enter numbers!")
@@ -122,6 +137,38 @@ class Player:
         else:
             self.random_move()
 
+    def ai_move(self):
+        def winning(table: Table, player_sign: str):
+            for line in table.all_lines():
+                if table.two_in_line(line) == player_sign:
+                    return True
+            else:
+                return False
+
+        def minimax(table: Table, player_sign):
+            enemy_sign = 'X' if player_sign == 'O' else 'O'
+            if not table.contains_empty_cells():
+                return 0
+            elif winning(table, enemy_sign):
+                return -10
+            elif winning(table, player_sign):
+                return 10
+            else:
+                result = 0
+                new_table = deepcopy(table)
+                for free_cell in new_table.free_cells():
+                    new_table.set_sign(player_sign, *free_cell)
+                    result += minimax(new_table, enemy_sign)
+                return result
+
+        moves = dict.fromkeys(self.table.free_cells())
+        for cell in moves:
+            self.table.set_sign(self.sign, *cell)
+            moves[cell] = minimax(self.table, self.sign)
+            self.table.delete_sign(*cell)
+        best_move = max(moves, key=moves.get)
+        self.table.set_sign(self.sign, *best_move)
+
 
 class Game:
     def __init__(self, _table: Table, first_player_type: str, second_player_type: str):
@@ -135,23 +182,15 @@ class Game:
         self.last_player = self.second_player if self.last_player == self.first_player else self.first_player
         return self.last_player
 
-    def winner(self) -> str:
-        for line in self.table.all_lines():
-            winner = self.table.three_in_line(line)
-            if winner:
-                return winner
-        else:
-            return ''
-
     def state(self) -> str:
-        winner = self.winner()
+        winner = self.table.winner()
         if winner:
             return f"{winner} wins"
         elif not self.table.contains_empty_cells():
             return "Draw"
 
     def is_over(self) -> bool:
-        return self.winner() or not self.table.contains_empty_cells()
+        return self.table.winner() or not self.table.contains_empty_cells()
 
 
 def user_turn(player: Player):
@@ -190,7 +229,7 @@ while command != "exit":
     command = input("Input command: ")
     correct_start_conditions = (command.startswith('start '),
                                 len(command.split(' ')) == 3,
-                                all(map(lambda it: it in ("user", "easy", "medium"), command.split(' ')[1:])))
+                                all(map(lambda it: it in ("user", "easy", "medium", "hard"), command.split(' ')[1:])))
     if all(correct_start_conditions):
         play_game(*command.split(' ')[1:])
     elif command != 'exit' and not all(correct_start_conditions):
