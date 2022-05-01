@@ -2,30 +2,52 @@ from collections import Counter
 import random
 import re
 from itertools import chain, product
-from copy import deepcopy
 
 
-class Cell(str):
-    def __init__(self, value):
-        self.value = value
+class Cell:
+    def __init__(self, value: str = ' '):
+        self.value: str = value
         self.coordinates = 0, 0
+
+    def __eq__(self, it):
+        return it == self.value
+
+    def __add__(self, it: str) -> str:
+        return self.value + it
+
+    def __str__(self):
+        return self.value
+
+    def __repr__(self):
+        return self.value
+
+    def __hash__(self):
+        return self.value.__hash__()
+
+    def new_sign(self, sign):
+        self.value = sign
+
+    def is_occupied(self):
+        return self.value != ' '
+
+    def is_free(self):
+        return not self.is_occupied()
 
 
 class Table(list):
     def __init__(self):
         super().__init__()
         for i in range(3):
-            self.append([])
+            self.append(tuple(Cell() for _ in range(3)))
             for j in range(3):
-                self[i].append(Cell(' '))
                 self[i][j].coordinates = i, j
 
-    def vertical_lines(self) -> list:
-        return list(zip(*self))
+    def vertical_lines(self) -> tuple:
+        return tuple(map(tuple, zip(*self)))
 
-    def diagonals(self) -> list:
-        return [[self[i][i] for i in range(3)],
-                [self[i][2 - i] for i in range(3)]]
+    def diagonals(self) -> tuple:
+        return (tuple(self[i][i] for i in range(3)),
+                tuple(self[i][2 - i] for i in range(3)))
 
     def all_signs(self) -> tuple:
         return tuple(chain(*self))
@@ -37,11 +59,11 @@ class Table(list):
         return ' ' in self.all_signs()
 
     def free_cells(self) -> list[tuple]:
-        return [(i, j) for i, j in product(range(3), repeat=2) if self[i][j] == ' ']
+        return [(i, j) for i, j in product(range(3), repeat=2) if self[i][j].is_free()]
 
     @staticmethod
-    def three_in_line(line: list[str]) -> str:
-        return line[0] if line.count(line[0]) == 3 and line[0] != ' ' else ''
+    def three_in_line(line: list) -> str:
+        return line[0].value if line.count(line[0]) == 3 and line[0] != ' ' else ''
 
     @staticmethod
     def two_in_line(line: list[str]) -> str:
@@ -51,10 +73,7 @@ class Table(list):
         return ''
 
     def set_sign(self, sign: str, x: int, y: int):
-        self[x][y] = sign
-
-    def delete_sign(self, x: int, y: int):
-        self[x][y] = ' '
+        self[x][y].new_sign(sign)
 
     def is_cell_occupied(self, _x: int, _y: int) -> bool:
         return self[_x][_y] != ' '
@@ -63,7 +82,10 @@ class Table(list):
         horizontal_line = "-" * 9
         output = horizontal_line + '\n'
         for row in self:
-            output += f"| {' '.join(row)} |\n"
+            output += "| "
+            for cell in row:
+                output += cell + ' '
+            output += "|\n"
         return output + horizontal_line
 
 
@@ -75,14 +97,14 @@ class Player:
         self.moves_counter = 0
 
     def manual_move(self, user_input: str):
-        if re.fullmatch(r"[1-3]\s+[1-3]", user_input):
-            coordinates = tuple(map(lambda it: int(it) - 1, re.split(r'\s+', user_input)))
+        if re.fullmatch(r"[1-3] [1-3]", user_input):
+            coordinates = tuple(map(lambda it: int(it) - 1, user_input.split(' ')))
             if self.table.is_cell_occupied(*coordinates):
                 raise ValueError("This cell is occupied! Choose another one!")
             else:
                 self.table.set_sign(self.sign, *coordinates)
                 self.moves_counter += 1
-        elif re.match(r'\d+\s+\d+', user_input):
+        elif re.match(r'\d+ \d+', user_input):
             raise ValueError("Coordinates should be from 1 to 3!")
         else:
             raise ValueError("You should enter numbers!")
@@ -99,38 +121,6 @@ class Player:
                 break
         else:
             self.random_move()
-
-    def ai_move(self):
-        def winning(table: Table, player_sign: str):
-            for line in table.all_lines():
-                if table.two_in_line(line) == player_sign:
-                    return True
-            else:
-                return False
-
-        def minimax(table: Table, player_sign):
-            enemy_sign = 'X' if player_sign == 'O' else 'O'
-            if not table.contains_empty_cells():
-                return 0
-            elif winning(table, enemy_sign):
-                return -10
-            elif winning(table, player_sign):
-                return 10
-            else:
-                result = 0
-                new_table = deepcopy(table)
-                for free_cell in new_table.free_cells():
-                    new_table.set_sign(player_sign, *free_cell)
-                    result += minimax(new_table, enemy_sign)
-                return result
-
-        moves = dict.fromkeys(self.table.free_cells())
-        for cell in moves:
-            self.table.set_sign(self.sign, *cell)
-            moves[cell] = minimax(self.table, self.sign)
-            self.table.delete_sign(*cell)
-        best_move = max(moves, key=moves.get)
-        self.table.set_sign(self.sign, *best_move)
 
 
 class Game:
@@ -183,18 +173,15 @@ def make_move_by(player: Player):
                 player.random_move()
             case 'medium':
                 player.smart_move()
-            case 'hard':
-                player.ai_move()
 
 
 def play_game(first_player_type, second_player_type):
-    table = Table()
-    game = Game(table, first_player_type, second_player_type)
+    game = Game(Table(), first_player_type, second_player_type)
 
-    print(table)
+    print(game.table)
     while not game.is_over():
         make_move_by(game.current_player())
-        print(table)
+        print(game.table)
     print(game.state())
 
 
@@ -203,7 +190,7 @@ while command != "exit":
     command = input("Input command: ")
     correct_start_conditions = (command.startswith('start '),
                                 len(command.split(' ')) == 3,
-                                all(map(lambda it: it in ("user", "easy", "medium", "hard"), command.split(' ')[1:])))
+                                all(map(lambda it: it in ("user", "easy", "medium"), command.split(' ')[1:])))
     if all(correct_start_conditions):
         play_game(*command.split(' ')[1:])
     elif command != 'exit' and not all(correct_start_conditions):
