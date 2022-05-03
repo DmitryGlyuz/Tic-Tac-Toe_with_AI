@@ -2,7 +2,6 @@ from collections import Counter
 import random
 import re
 from itertools import chain, product
-from copy import deepcopy
 
 
 class Cell:
@@ -19,23 +18,17 @@ class Cell:
     def __str__(self):
         return self.value
 
-    def __repr__(self):
-        return self.value
-
     def __hash__(self):
         return self.value.__hash__()
 
-    def new_sign(self, sign):
-        self.value = sign
+    def set_mark(self, mark: str):
+        self.value = mark
 
-    def remove_sign(self):
+    def remove_mark(self):
         self.value = ' '
 
     def is_occupied(self):
         return self.value != ' '
-
-    def is_free(self):
-        return not self.is_occupied()
 
 
 class Table(list):
@@ -53,41 +46,32 @@ class Table(list):
         return (tuple(self[i][i] for i in range(3)),
                 tuple(self[i][2 - i] for i in range(3)))
 
-    def all_signs(self) -> tuple:
+    def all_marks(self) -> tuple:
         return tuple(chain(*self))
 
     def all_lines(self) -> tuple:
         return tuple(chain(self, self.vertical_lines(), self.diagonals()))
 
     def contains_empty_cells(self) -> bool:
-        return ' ' in self.all_signs()
+        return ' ' in self.all_marks()
 
     def free_cells(self) -> list[tuple]:
-        return [(i, j) for i, j in product(range(3), repeat=2) if self[i][j].is_free()]
+        return [(i, j) for i, j in product(range(3), repeat=2) if not self[i][j].is_occupied()]
 
     @staticmethod
-    def three_in_line(line: list) -> str:
-        return line[0].value if line.count(line[0]) == 3 and line[0] != ' ' else ''
+    def three_marks_on_line(line: list) -> str:
+        return line[0].value if line.count(line[0].value) == 3 and line[0] != ' ' else ''
 
     @staticmethod
-    def two_in_line(line: list[str]) -> str:
+    def two_identical_marks_on_line(line: list[str]) -> str:
         counter = Counter(line)
         if counter[' '] == 1 and 2 in counter.values():
             return counter.most_common(1)[0][0]
         return ''
 
-    def set_sign(self, sign: str, x: int, y: int):
-        self[x][y].new_sign(sign)
-
-    def delete_sign(self, x: int, y: int):
-        self[x][y].remove_sign()
-
-    def is_cell_occupied(self, _x: int, _y: int) -> bool:
-        return self[_x][_y].is_occupied()
-
     def winner(self) -> str:
         for line in self.all_lines():
-            winner = self.three_in_line(line)
+            winner = self.three_marks_on_line(line)
             if winner:
                 return winner
         else:
@@ -105,10 +89,10 @@ class Table(list):
 
 
 class Player:
-    def __init__(self, _type, _sign: str, _table: Table):
+    def __init__(self, _type, _mark: str, _table: Table):
         self.type = _type
         self.table = _table
-        self.sign = _sign
+        self.mark = _mark
         self.moves_counter = 0
 
     def manual_move(self, user_input: str):
@@ -117,7 +101,7 @@ class Player:
             if self.table[x][y].is_occupied():
                 raise ValueError("This cell is occupied! Choose another one!")
             else:
-                self.table.set_sign(self.sign, x, y)
+                self.table[x][y].set_mark(self.mark)
                 self.moves_counter += 1
         elif re.match(r'\d+\s+\d+', user_input):
             raise ValueError("Coordinates should be from 1 to 3!")
@@ -125,49 +109,43 @@ class Player:
             raise ValueError("You should enter numbers!")
 
     def random_move(self):
-        self.table.set_sign(self.sign, *random.choice(self.table.free_cells()))
+        (x, y) = random.choice(self.table.free_cells())
+        self.table[x][y].set_mark(self.mark)
 
-    def smart_move(self):
+    def medium_move(self):
         for line in self.table.all_lines():
-            two_signs = self.table.two_in_line(line)
-            if two_signs:
+            if self.table.two_identical_marks_on_line(line):
                 x, y = line[line.index(' ')].coordinates
-                self.table.set_sign(self.sign, x, y)
+                self.table[x][y].set_mark(self.mark)
                 break
         else:
             self.random_move()
 
-    def ai_move(self):
-        def winning(table: Table, player_sign: str):
-            for line in table.all_lines():
-                if table.two_in_line(line) == player_sign:
-                    return True
-            else:
-                return False
+    def hard_move(self):
+        def another_mark(current_mark: str) -> str:
+            return 'X' if current_mark == 'O' else 'O'
 
-        def minimax(table: Table, player_sign):
-            enemy_sign = 'X' if player_sign == 'O' else 'O'
-            if not table.contains_empty_cells():
+        def minimax(table: Table, current_mark: str):
+            winner = table.winner()
+            if winner:
+                return 1 if winner == self.mark else -1
+            elif not table.contains_empty_cells():
                 return 0
-            elif winning(table, enemy_sign):
-                return -10
-            elif winning(table, player_sign):
-                return 10
             else:
-                result = 0
-                new_table = deepcopy(table)
-                for free_cell in new_table.free_cells():
-                    new_table.set_sign(player_sign, *free_cell)
-                    result += minimax(new_table, enemy_sign)
-                return result
+                scores = []
+                for _x, _y in table.free_cells():
+                    self.table[_x][_y].set_mark(current_mark)
+                    scores.append(minimax(table, another_mark(current_mark)))
+                    table[_x][_y].remove_mark()
+                return max(scores) if current_mark == self.mark else min(scores)
 
         moves = dict.fromkeys(self.table.free_cells())
-        for cell in moves:
-            self.table.set_sign(self.sign, *cell)
-            moves[cell] = minimax(self.table, self.sign)
-            self.table.delete_sign(*cell)
-        best_move = max(moves, key=moves.get)
-        self.table.set_sign(self.sign, *best_move)
+        for x, y in moves:
+            self.table[x][y].set_mark(self.mark)
+            moves[(x, y)] = minimax(self.table, another_mark(self.mark))
+            self.table[x][y].remove_mark()
+        x, y = max(moves, key=moves.get)
+        self.table[x][y].set_mark(self.mark)
 
 
 class Game:
@@ -193,7 +171,7 @@ class Game:
         return self.table.winner() or not self.table.contains_empty_cells()
 
 
-def user_turn(player: Player):
+def user_move(player: Player):
     moves = player.moves_counter
     while moves == player.moves_counter:
         try:
@@ -204,19 +182,20 @@ def user_turn(player: Player):
 
 def make_move_by(player: Player):
     if player.type == "user":
-        user_turn(player)
+        user_move(player)
     else:
         print(f'Making move level "{player.type}"')
         match player.type:
             case 'easy':
                 player.random_move()
             case 'medium':
-                player.smart_move()
+                player.medium_move()
+            case 'hard':
+                player.hard_move()
 
 
 def play_game(first_player_type, second_player_type):
     game = Game(Table(), first_player_type, second_player_type)
-
     print(game.table)
     while not game.is_over():
         make_move_by(game.current_player())
